@@ -45,6 +45,25 @@ $ npm run start:dev
 $ npm run start:prod
 ```
 
+## Manager Migrations
+
+```bash
+# generate migrations
+$ npm run typeorm migration:create -n <NameOfMigration> -d src/migrations
+
+# run migrations
+$ npm run typeorm migration:run
+
+```
+
+## Seeds
+
+```bash
+# run seeds
+npm run console fixtures
+
+```
+
 ## Test
 
 ```bash
