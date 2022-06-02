@@ -36,7 +36,7 @@ import { join } from 'path';
           protoPath: [join(__dirname, 'protofiles/pixkey.proto')]
         }
       }
-    ])
+    ]),
   ],
   controllers: [AppController, BankAccountController, PixKeyController],
   providers: [AppService, FixturesCommand],
