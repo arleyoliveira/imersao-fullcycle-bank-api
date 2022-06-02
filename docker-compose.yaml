@@ -2,6 +2,7 @@ version: '3'
 
 services:
   nestbank_app:
+    container_name: nestbank_app
     build: .
     entrypoint: .docker/entrypoint.sh
     ports:
@@ -15,6 +16,7 @@ services:
     networks:
       - bubble
   nestbank_db:
+    container_name: nestbank_db
     build: .docker/postgres
     restart: always
     tty: true

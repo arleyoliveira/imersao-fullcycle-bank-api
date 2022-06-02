@@ -5,12 +5,15 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { BankAccount } from './models/bank-account.models';
 import { BankAccountController } from './controllers/bank-account/bank-account.controller';
+import { TransactionController } from './controllers/transaction/transaction.controller';
 import { ConsoleModule } from 'nestjs-console';
 import { FixturesCommand } from './fixtures/fixtures.command';
 import { PixKeyController } from './controllers/pix-key/pix-key.controller';
 import { PixKey } from './models/pix-key.models';
 import { ClientsModule, Transport, } from '@nestjs/microservices';
 import { join } from 'path';
+import { Transaction } from './models/transaction.model';
+
 
 @Module({
   imports: [
@@ -23,9 +26,9 @@ import { join } from 'path';
       username: process.env.TYPEORM_USERNAME,
       password: process.env.TYPEORM_PASSWORD,
       database: process.env.TYPEORM_DATABASE,
-      entities: [BankAccount, PixKey]
+      entities: [BankAccount, PixKey, Transaction]
     }),
-    TypeOrmModule.forFeature([BankAccount, PixKey]),
+    TypeOrmModule.forFeature([BankAccount, PixKey, Transaction]),
     ClientsModule.register([
       {
         name: 'CODEPIX_PACKAGE',
@@ -37,8 +40,34 @@ import { join } from 'path';
         }
       }
     ]),
+    ClientsModule.register([
+      {
+        name: 'TRANSACTION_SERVICE',
+        transport: Transport.KAFKA,
+        options: {
+          client: {
+            clientId: process.env.KAFKA_CLIENT_ID,
+            brokers: [process.env.KAFKA_BROKER]
+          },
+          consumer: {
+            groupId: !process.env.KAFKA_CONSUMER_GROUP_ID ||
+              process.env.KAFKA_CONSUMER_GROUP_ID === ''
+              ? 'my-consumer-' + Math.random()
+              : process.env.KAFKA_CONSUMER_GROUP_ID,
+          }
+        }
+      }
+    ])
   ],
-  controllers: [AppController, BankAccountController, PixKeyController],
-  providers: [AppService, FixturesCommand],
+  controllers: [
+    AppController,
+    BankAccountController,
+    PixKeyController,
+    TransactionController
+  ],
+  providers: [
+    AppService,
+    FixturesCommand
+  ],
 })
 export class AppModule { }

@@ -49,7 +49,7 @@ $ npm run start:prod
 
 ```bash
 # generate migrations
-$ npm run typeorm migration:create -n <NameOfMigration> -d src/migrations
+$ npx typeorm migration:create -n <NameOfMigration> -d src/migrations
 
 # run migrations
 $ npm run typeorm migration:run
