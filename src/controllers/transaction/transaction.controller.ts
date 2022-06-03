@@ -10,7 +10,7 @@ import {
     Post,
     ValidationPipe,
 } from '@nestjs/common';
-import { ClientKafka } from '@nestjs/microservices';
+import { ClientKafka, MessagePattern, Payload } from '@nestjs/microservices';
 import { Producer } from '@nestjs/microservices/external/kafka.interface';
 import { InjectRepository } from '@nestjs/typeorm';
 import { TransactionDto } from 'src/dto/transaction.dto';
@@ -18,7 +18,7 @@ import { KafkaTopic } from 'src/enumerators/kafka-topic.enum';
 import { BankAccount } from 'src/models/bank-account.models';
 import { PixKey } from 'src/models/pix-key.models';
 import {
-    Transaction, TransactionOperation
+    Transaction, TransactionOperation, TransactionStatus
 } from 'src/models/transaction.model';
 import { Repository } from 'typeorm';
 
@@ -85,23 +85,101 @@ export class TransactionController implements OnModuleInit, OnModuleDestroy {
 
         transaction = await this.transactionRepo.save(transaction);
 
-
         const sendData = {
-            id: transaction.external_id,
+            id: transaction.id,
             accountId: bankAccountId,
             amount: body.amount,
-            pixkeyto: body.pix_key_key,
-            pix_key_kind: body.pix_key_kind,
+            pixKeyTo: body.pix_key_key,
+            pixKeyKindTo: body.pix_key_kind,
             description: body.description
         };
 
         await this.kafkaProducer.send({
             topic: KafkaTopic.transaction,
             messages: [
-                { key: 'transactions', value: JSON.stringify(sendData) }
+                { key: KafkaTopic.transaction, value: JSON.stringify(sendData) }
+            ]
+        });
+
+        return transaction;
+    }
+
+    @MessagePattern(KafkaTopic.bank_receiver)
+    async doTransaction(@Payload() message) {
+        if (message.value.status === TransactionStatus.pending) {
+            await this.receivedTransaction(message.value);
+        }
+
+        if (message.value.status === TransactionStatus.confirmed) {
+            await this.confirmedTransaction(message.value);
+        }
+    }
+
+
+    async receivedTransaction(data) {
+        const pixKey = await this.pixKeyRepo.findOneOrFail({
+            where: {
+                key: data.pixKeyTo,
+                kind: data.pixKeyKindTo
+            }
+        });
+
+        const transaction = this.transactionRepo.create({
+            external_id: data.id,
+            amount: data.amount,
+            description: data.description,
+            bank_account_id: pixKey.bank_account_id,
+            bank_account_from_id: data.accountID,
+            operation: TransactionOperation.credit,
+            status: TransactionStatus.completed
+        });
+
+        this.transactionRepo.save(transaction);
+
+        const sendData = {
+            ...data,
+            status: TransactionStatus.confirmed,
+        }
+
+        await this.kafkaProducer.send({
+            topic: KafkaTopic.transaction_confirmation,
+            messages: [
+                { key: KafkaTopic.transaction_confirmation, value: JSON.stringify(sendData) }
+            ]
+        });
+    }
+
+    async confirmedTransaction(data) {
+
+        const transaction = await this.transactionRepo.findOneOrFail({
+            where: {
+                id: data.id
+            }
+        })
+
+        await this.transactionRepo.update(
+            { id: transaction.id },
+            {
+                status: TransactionStatus.completed
+            }
+        );
+
+        const sendData = {
+            id: data.id,
+            accountId: transaction.bank_account_id,
+            amount: Math.abs(transaction.amount),
+            pixKeyTo: transaction.pix_key_key,
+            pixKeyKindTo: transaction.pix_key_kind,
+            description: transaction.description,
+            status: TransactionStatus.completed
+        }
+
+        await this.kafkaProducer.send({
+            topic: KafkaTopic.transaction_confirmation,
+            messages: [
+                { key: KafkaTopic.transaction_confirmation, value: JSON.stringify(sendData) }
             ]
         });
 
     }
-
 }
